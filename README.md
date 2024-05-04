@@ -13,15 +13,45 @@ Partner Solution Deployment Guide](https://aws-ia.github.io/cfn-ecr-aws-soci-ind
 
 ## Usage
 
+Using it with the Lambda code provided by the AWS IA-team:
+
+```hcl
+
+// Copy the Lambda code FROM AWS-IA bucket to own S3 bucket
+module "copy_lambda_code" {
+  source                       = "kahlstrm/ecr-soci-indexer/aws//modules/copy-lambda-code"
+  deployment_assets_bucket     = "my-soci-index-assets-bucket" // needs to be created before running this module
+  region                       = "us-east-1"
+  deployment_assets_key_prefix = "path/to/my/artifacts/" // optional, defaults to "cfn-ecr-aws-soci-index-builder/"
+}
+module "soci_index_builder" {
+  source                                 = "kahlstrm/ecr-soci-indexer/aws"
+  deployment_assets_bucket               = module.copy_lambda_code.asset_bucket
+  ecr_image_filter_lambda_asset_path     = module.copy_lambda_code.ecr_image_filter_lambda_asset_path
+  soci_index_generator_lambda_asset_path = module.copy_lambda_code.soci_index_generator_lambda_asset_path
+  region                                 = "us-east-1"
+  account_id                             = "123456789012"
+  soci_repository_image_tag_filters      = ["repo1:tag1", "repo2:*"] // optional defaults to matching all tags in all repositories (`["*:*"]`)
+  resource_prefix                        = "my-soci-indexer"         // optional, defaults to "ecr-soci-indexer".
+}
+```
+
+Using it with your own Lambda code:
+
 ```hcl
 module "soci_index_builder" {
-  source                            = "kahlstrm/ecr-soci-indexer/aws"
-  deployment_assets_bucket_name     = "my-soci-index-assets-bucket"
-  region                            = "us-east-1"
-  account_id                        = "123456789012"
-  soci_repository_image_tag_filters = ["repo1:tag1", "repo2:*"] // optional defaults to matching all tags in all repositories (`["*:*"]`)
-  resource_prefix                   = "my-soci-indexer" // optional, defaults to "ecr-soci-indexer".
-  deployment_assets_key_prefix      = "path/to/my/artifacts/" // optional, defaults to "cfn-ecr-aws-soci-index-builder/"
+  source                                 = "kahlstrm/ecr-soci-indexer/aws"
+  deployment_assets_bucket               = "bucket-name"
+  ecr_image_filter_lambda_asset_path     = "path/to/your/ecr-image-filter.zip" // NOTE: needs to be inside the "deployment_assets_bucket" bucket
+  ecr_image_filter_lambda_handler        = "ecr_image_action_event_filtering_lambda_function.lambda_handler" // optional, defaults to "ecr_image_action_event_filtering_lambda_function.lambda_handler" (the handler in the provided lambda code)
+  ecr_image_filter_lambda_runtime        = "python3.9" // optional, defaults to "python3.9" (the runtime in the provided lambda code)
+  soci_index_generator_lambda_asset_path = "path/to/your/soci-index-generator.zip" // NOTE: needs to be inside the "deployment_assets_bucket" bucket
+  soci_index_generator_lambda_handler    = "main" // optional, defaults to "main" (the handler in the provided lambda code)
+  soci_index_generator_lambda_runtime    = "provided.al2" // optional, defaults to "provided.al2" (the runtime in the provided lambda code)
+  region                                 = "us-east-1"
+  account_id                             = "123456789012"
+  soci_repository_image_tag_filters      = ["repo1:tag1", "repo2:*"] // optional defaults to matching all tags in all repositories (`["*:*"]`)
+  resource_prefix                        = "my-soci-indexer"         // optional, defaults to "ecr-soci-indexer".
 }
 ```
 
@@ -60,6 +90,6 @@ This module configures AWS Lambda functions using code packages that are stored 
 
 ### Using Your Own Lambda Code
 
-Currently not supported directly by this module. However, you can take heavy inspiration (i.e. copy-paste) from the [source-repository](https://github.com/kahlstrm/terraform-aws-ecr-soci-indexer) and alter the internals to use your own Lambda code.
+If you choose to use your own Lambda code, ensure that it meets the requirements and functionality expected by the module. The Lambda code must be compatible with the module's configuration and the AWS services it interacts with. The responsibility for the security, functionality, and maintenance of the Lambda code lies with the user. Good place to start is the [Reference Lambda code](https://github.com/aws-ia/cfn-ecr-aws-soci-index-builder/tree/main/functions/source) provided by the AWS IA-team.
 
 We encourage users to fully understand the implications of using externally sourced code and to implement appropriate governance and security measures.

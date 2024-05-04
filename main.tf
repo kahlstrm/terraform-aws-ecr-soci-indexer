@@ -1,36 +1,19 @@
 locals {
-  ecr_image_action_event_filtering_lambda_object_path = "functions/packages/ecr-image-action-event-filtering/lambda.zip"
-  soci_index_generator_lambda_object_path             = "functions/packages/soci-index-generator-lambda/soci_index_generator_lambda.zip"
-  aws_quickstart_soci_indexer_prefix                  = "aws-quickstart-${var.region}/cfn-ecr-aws-soci-index-builder/"
-  resource_prefix                                     = var.resource_prefix != "" ? "${var.resource_prefix}-" : ""
+  resource_prefix = var.resource_prefix != "" ? "${var.resource_prefix}-" : ""
 }
 
-# ECR image filtering lambda function package, from https://aws-ia.github.io/cfn-ecr-aws-soci-index-builder/
-# source code available at https://github.com/aws-ia/cfn-ecr-aws-soci-index-builder
-resource "aws_s3_object_copy" "ecr_image_action_event_filtering_lambda_object" {
-  bucket = var.deployment_assets_bucket_name
-  key    = "${var.deployment_assets_key_prefix}${local.ecr_image_action_event_filtering_lambda_object_path}"
-  source = "${local.aws_quickstart_soci_indexer_prefix}${local.ecr_image_action_event_filtering_lambda_object_path}"
-}
-# SOCI index generator lambda function package, from https://aws-ia.github.io/cfn-ecr-aws-soci-index-builder/
-# source code available at https://github.com/aws-ia/cfn-ecr-aws-soci-index-builder
-resource "aws_s3_object_copy" "soci_index_generator_lambda_object" {
-  bucket = var.deployment_assets_bucket_name
-  key    = "${var.deployment_assets_key_prefix}${local.soci_index_generator_lambda_object_path}"
-  source = "${local.aws_quickstart_soci_indexer_prefix}${local.soci_index_generator_lambda_object_path}"
-}
+
 resource "aws_lambda_function" "ecr_image_action_event_filtering" {
   function_name = "${local.resource_prefix}ECRImageActionEventFilter"
-  handler       = "ecr_image_action_event_filtering_lambda_function.lambda_handler"
-  runtime       = "python3.9"
+  handler       = var.ecr_image_filter_lambda_handler
+  runtime       = var.ecr_image_filter_lambda_runtime
   role          = aws_iam_role.ecr_image_action_event_filtering.arn
   timeout       = 900
   logging_config {
     log_format = "Text"
   }
-  s3_bucket = aws_s3_object_copy.ecr_image_action_event_filtering_lambda_object.bucket
-  s3_key    = aws_s3_object_copy.ecr_image_action_event_filtering_lambda_object.key
-
+  s3_bucket = var.deployment_assets_bucket
+  s3_key    = var.ecr_image_filter_lambda_asset_path
   environment {
     variables = {
       soci_repository_image_tag_filters = join(",", var.soci_repository_image_tag_filters)
@@ -41,13 +24,13 @@ resource "aws_lambda_function" "ecr_image_action_event_filtering" {
 
 resource "aws_lambda_function" "soci_index_generator" {
   function_name = "${local.resource_prefix}SociIndexGenerator"
-  handler       = "main"
-  runtime       = "provided.al2"
+  handler       = var.ecr_image_filter_lambda_handler
+  runtime       = var.soci_index_generator_lambda_runtime
   role          = aws_iam_role.soci_index_generator.arn
   timeout       = 900
 
-  s3_bucket = aws_s3_object_copy.soci_index_generator_lambda_object.bucket
-  s3_key    = aws_s3_object_copy.soci_index_generator_lambda_object.key
+  s3_bucket = var.deployment_assets_bucket
+  s3_key    = var.soci_index_generator_lambda_asset_path
   ephemeral_storage {
     size = 10240 # 10GB
   }
